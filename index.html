@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>โมเดล 3 มิติ วงจรชาร์จ-จ่ายไฟ 2S</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:#1a1f26;color:#eceff2;font-family:"Noto Sans Thai",system-ui,sans-serif;overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:fixed;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
+#ui>*{pointer-events:auto}
+h1{font-size:1rem;margin:0 8px 0 0}
+button{background:#ee4d2d;color:#fff;border:0;border-radius:8px;padding:8px 12px;font:inherit;font-weight:600}
+button.off{background:#444b54}
+#hint{position:fixed;bottom:calc(10px + env(safe-area-inset-bottom,0px));left:10px;right:10px;font-size:.8rem;color:#9aa5b1}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>วงจรชาร์จ-จ่ายไฟ 2S</h1>
+  <button id="bSw">เปิด/ปิดสวิตช์</button>
+  <button id="bRot">หมุนอัตโนมัติ</button>
+  <button id="bLab">ป้ายชื่อ</button>
+</div>
+<div id="hint">ลากเพื่อหมุน · ล้อเมาส์/ถ่างนิ้วเพื่อซูม · แตะสวิตช์เพื่อเปิด-ปิด (สายสีแดง = +, ดำ = −, เขียว = กลางแบต 3H)</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const cv=document.getElementById('c');
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));
+const S=new THREE.Scene();S.background=new THREE.Color(0x1a1f26);
+const cam=new THREE.PerspectiveCamera(45,1,.1,200);
+S.add(new THREE.HemisphereLight(0xffffff,0x334455,.8));
+const dl=new THREE.DirectionalLight(0xffffff,.8);dl.position.set(8,18,10);S.add(dl);
+const G=new THREE.Group();S.add(G);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(40,28),new THREE.MeshStandardMaterial({color:0x232a33}));
+floor.rotation.x=-Math.PI/2;floor.position.y=-.01;G.add(floor);
+
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.6},o));
+function box(w,h,d,c,x,y,z,p=G){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c));m.position.set(x,y,z);p.add(m);return m}
+function cyl(r,h,c,x,y,z,p=G){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,20),M(c,{metalness:.4}));m.position.set(x,y,z);p.add(m);return m}
+function label(t,x,y,z,col='#fff'){const c=document.createElement('canvas');c.width=256;c.height=64;const g=c.getContext('2d');
+  g.fillStyle='rgba(0,0,0,.6)';g.fillRect(0,0,256,64);g.fillStyle=col;g.font='bold 30px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(t,128,34);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c)}));s.scale.set(4,1,1);s.position.set(x,y,z);labels.add(s)}
+const labels=new THREE.Group();G.add(labels);
+function pad(x,y,z,t){const m=cyl(.2,.06,0xd4af37,x,y,z);label(t,x,y+.9,z,'#ffd54a')}
+function wire(pts,col){const c=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p)),false,'catmullrom',.1);
+  G.add(new THREE.Mesh(new THREE.TubeGeometry(c,48,.07,8),M(col)))}
+
+// Battery holder 2x18650
+box(6,2.2,9.5,0x15171a,-9,1.1,0);
+box(5.4,.1,8.9,0x2a2e33,-9,2.25,0);
+[-1.4,1.4].forEach(dx=>cyl(1.0,7.6,0xb9c2cc,-9+dx,1.9,0).rotation.x=Math.PI/2);
+label('Holder 18650 x2 (7.4V)',-9,3.6,0);
+
+// BMS 2S
+box(4.6,.15,1.9,0x1d5fb4,-1,.1,-2);
+box(.9,.3,.7,0x111111,-1.2,.3,-1.7);box(.9,.3,.7,0x111111,-.1,.3,-1.7);
+box(.5,.2,.3,0x222222,-1.2,.25,-2.4);box(.5,.2,.3,0x222222,-.1,.25,-2.4);
+pad(-3.2,.2,-2.6,'B+');pad(-3.2,.2,-1.4,'B-');pad(1.8,.2,-2.6,'3H');pad(2.0,.2,-1.5,'P+');pad(2.0,.2,-.7,'P-');
+label('BMS 2S 10A',-1,1.2,-3.4,'#8fd0ff');
+
+// Charger Type-C
+box(3.2,.15,2.3,0x15171a,0,.1,3.5);
+box(1.0,.5,1.0,0x1a1a1a,.4,.4,3.5);
+const usb=box(.7,.45,1.2,0xc0c6cc,1.3,.35,3.5);
+cyl(.0,0,0,0,0,0);
+pad(-1.4,.2,2.8,'B+');pad(-1.4,.2,3.6,'B-');
+label('ชาร์จ Type-C IP2326',0,1.3,5.2,'#9dffb0');
+
+// LM2596 buck + display
+box(4.6,.15,2.4,0x1b5fb0,7,.1,-3);
+box(2.0,.4,1.0,0x080808,7.2,.35,-2.9);
+cyl(.35,.5,0x777777,5.9,.45,-3.8);box(.6,.5,.6,0x2255cc,8.6,.4,-3.8);
+box(1.0,.6,1.0,0x222222,6.6,.45,-3.7);
+box(.8,.6,.8,0x2a6fe0,4.9,.4,-3.0);box(.8,.6,.8,0x2a6fe0,9.1,.4,-3.0);
+pad(4.7,.9,-3.6,'IN+');pad(4.7,.9,-2.4,'IN-');pad(9.3,.9,-3.6,'OUT+');pad(9.3,.9,-2.4,'OUT-');
+const dc=document.createElement('canvas');dc.width=256;dc.height=96;const dg=dc.getContext('2d');
+const dt=new THREE.CanvasTexture(dc);
+const disp=new THREE.Mesh(new THREE.PlaneGeometry(1.8,.8),new THREE.MeshBasicMaterial({map:dt}));
+disp.rotation.x=-Math.PI/2;disp.position.set(7.2,.56,-2.9);G.add(disp);
+function drawDisp(on){dg.fillStyle='#120000';dg.fillRect(0,0,256,96);dg.fillStyle=on?'#ff2a2a':'#2a0000';dg.font='bold 70px monospace';dg.textAlign='center';dg.textBaseline='middle';dg.fillText(on?'5.00':'8.88',128,50);dt.needsUpdate=true}
+label('LM2596 Buck',7,1.9,-4.6,'#8fd0ff');
+
+// Rocker switch
+box(3,1.6,2.6,0x0c0c0c,9,.8,4.5);
+const rock=new THREE.Group();rock.position.set(9,1.7,4.5);G.add(rock);
+const rb=box(2.5,.5,2.1,0x1b1b1b,0,0,0,rock);
+box(.2,.06,.9,0xffffff,0,.28,.2,rock);
+box(.12,.6,.12,0xc0c6cc,-.6,-1.9,1.9);
+const t1=box(.12,.7,.5,0xc4a65a,8.2,.2,5.9),t2=box(.12,.7,.5,0xc4a65a,9.8,.2,5.9);
+label('Switch KCD1',9,3,4.5,'#ffb4a8');
+
+// Wires: red + / black - / green balance
+wire([[-7,2.3,-3.8],[-5,2.6,-3.8],[-4,1.2,-2.8],[-3.2,.3,-2.6]],0xd32f2f);   // holder + -> B+
+wire([[-7,2.3,-3.2],[-5,2.4,-3],[-4,1,-1.6],[-3.2,.3,-1.4]],0x111111);       // holder - -> B-
+wire([[-9,2.3,-2.5],[-9,3.2,-4.6],[-3,3.4,-4.2],[1.8,.3,-2.6]],0x2ecc40);     // middle -> 3H
+wire([[-1.4,.3,2.8],[-1,.4,.8],[1.4,.4,-.8],[2.0,.3,-1.5]],0xd32f2f);         // charger B+ -> P+
+wire([[-1.4,.3,3.6],[-.5,.3,1.2],[.9,.3,-.2],[2.0,.3,-.7]],0x111111);         // charger B- -> P-
+wire([[2.0,.3,-1.5],[4,2.5,1.5],[7,2.5,4],[8.2,.5,5.9]],0xd32f2f);            // P+ -> switch
+wire([[9.8,.5,5.9],[11,2,2],[8,5,-1],[4.7,.9,-3.6]],0xd32f2f);                // switch -> IN+
+wire([[2.0,.3,-.7],[3.5,.3,-1.2],[4.7,.9,-2.4]],0x111111);                    // P- -> IN-
+
+// Interaction
+let on=false,auto=false,yaw=.6,pitch=.75,dist=34;
+function setSw(v){on=v;rock.rotation.z=on?.35:-.35;drawDisp(on)}
+setSw(false);
+document.getElementById('bSw').onclick=()=>setSw(!on);
+const bR=document.getElementById('bRot'),bL=document.getElementById('bLab');
+bR.className='off';bR.onclick=()=>{auto=!auto;bR.className=auto?'':'off'};
+bL.onclick=()=>{labels.visible=!labels.visible;bL.className=labels.visible?'':'off'};
+const rc=new THREE.Raycaster(),pts=new Map();let moved=0,pd=0;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);moved=0;pd=0});
+cv.addEventListener('pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;
+  if(pts.size==1){yaw-=(e.clientX-p[0])*.008;pitch=Math.max(.1,Math.min(1.5,pitch+(e.clientY-p[1])*.008));moved+=Math.abs(e.movementX)+Math.abs(e.movementY)}
+  else{const o=[...pts.entries()].find(([k])=>k!=e.pointerId)[1];const a=Math.hypot(p[0]-o[0],p[1]-o[1]),b=Math.hypot(e.clientX-o[0],e.clientY-o[1]);dist=Math.max(12,Math.min(60,dist*a/b));moved=99}
+  pts.set(e.pointerId,[e.clientX,e.clientY])});
+cv.addEventListener('pointerup',e=>{pts.delete(e.pointerId);
+  if(moved<5){const r=cv.getBoundingClientRect();rc.setFromCamera({x:(e.clientX-r.left)/r.width*2-1,y:-((e.clientY-r.top)/r.height)*2+1},cam);
+    if(rc.intersectObjects(rock.children).length)setSw(!on)}});
+cv.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(12,Math.min(60,dist*(1+e.deltaY*.001)))},{passive:false});
+function resize(){R.setSize(innerWidth,innerHeight,false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+(function loop(){requestAnimationFrame(loop);if(auto)yaw+=.004;
+  const d=innerWidth<innerHeight?dist*1.5:dist;
+  cam.position.set(Math.sin(yaw)*Math.cos(pitch)*d,Math.sin(pitch)*d,Math.cos(yaw)*Math.cos(pitch)*d);cam.lookAt(0,0,0);R.render(S,cam)})();
+</script>
+</body>
+</html>
